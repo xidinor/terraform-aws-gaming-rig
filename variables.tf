@@ -28,7 +28,7 @@ variable "instance_ami" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type
+  description = "EC2 instance type"
   type        = string
   default     = "g5.2xlarge"
 }
