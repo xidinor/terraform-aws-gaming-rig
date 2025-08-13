@@ -16,7 +16,7 @@ provider "aws" {
   region = var.region
 }
 
-# 1) VPC（IPv6自動割当、DNS有効）
+# 1) VPC (IPv6, DNS support enabled)
 resource "aws_vpc" "this" {
   cidr_block                       = var.vpc_cidr
   assign_generated_ipv6_cidr_block = true
@@ -26,13 +26,13 @@ resource "aws_vpc" "this" {
   tags = { Name = "simple-gaming-vpc" }
 }
 
-# 2) インターネットゲートウェイ
+# 2) internet gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.this.id
   tags   = { Name = "simple-gaming-igw" }
 }
 
-# 3) パブリックサブネット（2AZ、IPv6自動付与）
+# 3) public subnet (2 AZ, IPv6 enabled)
 resource "aws_subnet" "public" {
   count                             = length(var.azs)
   vpc_id                            = aws_vpc.this.id
@@ -45,7 +45,7 @@ resource "aws_subnet" "public" {
   tags = { Name = "simple-gaming-snet-${var.azs[count.index]}" }
 }
 
-# 4) ルートテーブル（IPv4/IPv6デフォルト）
+# 4) route table (IPv4, IPv6 default route)
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
 
@@ -68,12 +68,13 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# 5) セキュリティグループ (3389/8443/38810/38820/38830/38840 を IPv4/IPv6 全開放)
+# 5) security group
 resource "aws_security_group" "public_sg" {
   name        = "simple-gaming-sg"
   description = "Allow inbound MS-RDP, Amazon DCV, Virtual Desktop from anywhere"
   vpc_id      = aws_vpc.this.id
 
+# ingress: Allow 3389/8443/38810/38820/38830/38840, IPv4/IPv6 both
   ingress {
     description      = "RDP"
     from_port        = 3389
@@ -123,7 +124,7 @@ resource "aws_security_group" "public_sg" {
     ipv6_cidr_blocks = ["::/0"]
   }
 
-  # 送信はIPv4/IPv6とも全面許可
+  # egress traffic: Allow all
   egress {
     from_port        = 0
     to_port          = 0
@@ -135,22 +136,14 @@ resource "aws_security_group" "public_sg" {
   tags = { Name = "simple-gaming-sg" }
 }
 
-# 6) RSA キーペア生成
-resource "tls_private_key" "deployer" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
+# 6) generate RSA key pair
+# Omit EC2 key pair generation because the private key is not retrievable.
 
-resource "aws_key_pair" "deployer" {
-  key_name   = "simple-gaming-login-key"
-  public_key = tls_private_key.deployer.public_key_openssh
-}
-
-# 7) EC2（g6.2xlarge、64GiB、永続スポット：中断=停止）
+# 7) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
 resource "aws_instance" "app" {
   ami                         = var.instance_ami
   instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public[0].id     # 最初のサブネットに配置
+  subnet_id                   = aws_subnet.public[0].id     # deploy to 1st subnet
   key_name                    = aws_key_pair.deployer.key_name
   vpc_security_group_ids      = [aws_security_group.public_sg.id]
   associate_public_ip_address = true
@@ -163,9 +156,10 @@ resource "aws_instance" "app" {
   instance_market_options {
     market_type = "spot"
     spot_options {
-      spot_instance_type = "persistent" # 永続
-      instance_interruption_behavior = "stop" # 中断=停止
-      # max_price 未指定（上限なし）、valid_until 未指定（無期限）
+      spot_instance_type = "persistent"
+      instance_interruption_behavior = "stop"
+	  max_price = 0.3
+      # parameter: valid_until not specified
     }
   }
 
