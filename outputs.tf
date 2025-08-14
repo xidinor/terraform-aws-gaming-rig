@@ -28,8 +28,8 @@ output "instance_public_ip" {
   description = "IPv4 public IP address for created EC2"
 }
 
-# output "private_key_pem" {
-#  value       = tls_private_key.deployer.private_key_pem
-#  description = "created pem private key"
-#  sensitive   = true
-# }
+output "private_key_pem" {
+  description = "returns generated private key. if specified exists one, returns null."
+  value       = try(tls_private_key.deployer[0].private_key_pem, null)
+  sensitive   = true
+}

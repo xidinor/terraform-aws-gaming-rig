@@ -137,14 +137,39 @@ resource "aws_security_group" "public_sg" {
 }
 
 # 6) generate RSA key pair
-# Omit EC2 key pair generation because the private key is not retrievable.
+# If key_name not specified, generate new one.
+
+resource "tls_private_key" "deployer" {
+  count     = var.key_name == null ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "deployer" {
+  count      = var.key_name == null ? 1 : 0
+  key_name   = "deployer-key"
+  public_key = tls_private_key.deployer[0].public_key_openssh
+}
+
+locals {
+  resolved_key_name = coalesce(var.key_name, try(aws_key_pair.deployer[0].key_name, null))
+}
+
+# 7) EC2 instance
+data "aws_ssm_parameter" "fallback_ami" {
+  name = var.ssm_ami_parameter_name
+}
+
+locals {
+  final_ami_id = coalesce(var.instance_ami, data.aws_ssm_parameter.fallback_ami.value)
+}
 
 # 7) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
 resource "aws_instance" "app" {
   ami                         = var.instance_ami
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public[0].id     # deploy to 1st subnet
-  key_name                    = aws_key_pair.deployer.key_name
+  key_name                    = local.resolved_key_name
   vpc_security_group_ids      = [aws_security_group.public_sg.id]
   associate_public_ip_address = true
 

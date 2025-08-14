@@ -32,3 +32,9 @@ variable "instance_type" {
   type        = string
   default     = "g5.2xlarge"
 }
+
+variable "key_name" {
+  description = "EC2 keypair name. If not exists or null specified, generate new one."
+  type        = string
+  default     = null
+}
