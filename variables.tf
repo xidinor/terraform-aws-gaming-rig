@@ -41,7 +41,7 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "EC2 keypair name. If not exists or null specified, generate new one."
+  description = "EC2 key-pair name. If not exists or null specified, generate new one."
   type        = string
-  default     = null
+# default     = null
 }
