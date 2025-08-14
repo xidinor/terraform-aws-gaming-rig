@@ -27,6 +27,13 @@ variable "instance_ami" {
   type        = string
 }
 
+# SSM parameter for fallback: Windows Server 2025 English Full Base latest
+variable "ssm_ami_parameter_name" {
+  description = "Fallback SSM parameter for OS/Launguage"
+  type        = string
+  default     = "/aws/service/ami-windows-latest/Windows_Server-2025-English-Full-Base"
+}
+
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
