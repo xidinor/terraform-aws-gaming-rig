@@ -190,9 +190,7 @@ locals {
   buffered_spot = local.latest_spot_raw == null ? null : local.latest_spot_raw * (1 + var.spot_price_buffer_ratio)
 
   # Final string (USD/hour) passed to aws_instance; null means "no max price".
-  computed_spot_max_price = var.spot_max_price_mode == "buffer_above_spot"
-    ? (local.buffered_spot == null ? null : format("%.5f", local.buffered_spot))
-    : null
+  computed_spot_max_price = var.spot_max_price_mode == "buffer_above_spot" ? (local.buffered_spot == null ? null : format("%.5f", local.buffered_spot)) : null
 }
 
 # 8) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
