@@ -164,7 +164,38 @@ locals {
   final_ami_id = coalesce(var.instance_ami, data.aws_ssm_parameter.fallback_ami.value)
 }
 
-# 7) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
+# 7) Compute max_price based on the latest Spot price + buffer (when enabled)
+# === Fetch latest Spot price for the target instance type and AZ ===
+# Uses the first AZ (var.azs[0]) to match the subnet where the instance is placed.
+data "aws_ec2_spot_price" "current" {
+  instance_type     = var.instance_type
+  availability_zone = var.azs[0]
+
+  # Filter by product description (Windows vs Linux/UNIX etc.)
+  filter {
+    name   = "product-description"
+    values = [var.spot_product_description]
+  }
+
+  # In some regions/AZs there may be no recent entries; allow empty results.
+  allow_empty_results = true
+}
+
+# === Compute max_price based on the latest Spot price + buffer (when enabled) ===
+locals {
+  # Convert the returned string price to number; null if unavailable.
+  latest_spot_raw = try(tonumber(data.aws_ec2_spot_price.current.spot_price), null)
+
+  # Apply buffer when we have a valid latest price.
+  buffered_spot = local.latest_spot_raw == null ? null : local.latest_spot_raw * (1 + var.spot_price_buffer_ratio)
+
+  # Final string (USD/hour) passed to aws_instance; null means "no max price".
+  computed_spot_max_price = var.spot_max_price_mode == "buffer_above_spot"
+    ? (local.buffered_spot == null ? null : format("%.5f", local.buffered_spot))
+    : null
+}
+
+# 8) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
 resource "aws_instance" "app" {
   ami                         = local.final_ami_id
   instance_type               = var.instance_type
@@ -183,10 +214,11 @@ resource "aws_instance" "app" {
     spot_options {
       spot_instance_type = "persistent"
       instance_interruption_behavior = "stop"
-	  max_price = 0.5
+      # If null => Terraform treats it as "no max price" (OD price is the effective ceiling).
+      max_price = local.computed_spot_max_price
       # parameter: valid_until not specified
     }
   }
-
+  
   tags = { Name = "simple-gaming-pc" }
 }
