@@ -181,9 +181,10 @@ data "aws_ec2_spot_price" "current" {
 # === Compute max_price based on the latest Spot price + buffer (when enabled) ===
 locals {
   # Convert the returned string price to number; null if unavailable.
-  latest_spot_raw = var.use_live_spot_price && length(data.aws_ec2_spot_price.current) > 0
+  latest_spot_raw = (var.use_live_spot_price && length(data.aws_ec2_spot_price.current) > 0
     ? try(tonumber(data.aws_ec2_spot_price.current[0].spot_price), null)
     : null
+	)
 
   # Apply buffer when we have a valid latest price.
   buffered_spot = (
