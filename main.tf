@@ -164,36 +164,46 @@ locals {
   final_ami_id = coalesce(var.instance_ami, data.aws_ssm_parameter.fallback_ami.value)
 }
 
-# 7) Compute max_price based on the latest Spot price + buffer (when enabled)
+# 8) Compute max_price based on the latest Spot price + buffer (when enabled)
 # === Fetch latest Spot price for the target instance type and AZ ===
 # Uses the first AZ (var.azs[0]) to match the subnet where the instance is placed.
 data "aws_ec2_spot_price" "current" {
+  count             = var.use_live_spot_price ? 1 : 0
   instance_type     = var.instance_type
   availability_zone = var.azs[0]
 
-  # Filter by product description (Windows vs Linux/UNIX etc.)
   filter {
     name   = "product-description"
-    values = [var.spot_product_description]
+    values = [var.spot_product_description]  # 例: "Linux/UNIX"
   }
-
-  # In some regions/AZs there may be no recent entries; allow empty results.
-  allow_empty_results = true
 }
 
 # === Compute max_price based on the latest Spot price + buffer (when enabled) ===
 locals {
   # Convert the returned string price to number; null if unavailable.
-  latest_spot_raw = try(tonumber(data.aws_ec2_spot_price.current.spot_price), null)
+  latest_spot_raw = var.use_live_spot_price && length(data.aws_ec2_spot_price.current) > 0
+    ? try(tonumber(data.aws_ec2_spot_price.current[0].spot_price), null)
+    : null
 
   # Apply buffer when we have a valid latest price.
-  buffered_spot = local.latest_spot_raw == null ? null : local.latest_spot_raw * (1 + var.spot_price_buffer_ratio)
+  buffered_spot = (
+    local.latest_spot_raw == null
+    ? null
+    : (
+        try(var.spot_price_buffer_ratio, 0) == 0
+        ? local.latest_spot_raw
+        : local.latest_spot_raw * (1 + try(var.spot_price_buffer_ratio, 0))
+      )
+  )
 
-  # Final string (USD/hour) passed to aws_instance; null means "no max price".
-  computed_spot_max_price = var.spot_max_price_mode == "buffer_above_spot" ? (local.buffered_spot == null ? null : format("%.5f", local.buffered_spot)) : null
+  # spot_options.max_price parameter in aws_instance: expects string
+  # if null, "not set" (= maximum price same as On-Demand price)
+  computed_spot_max_price = (
+    local.buffered_spot == null ? null : format("%.5f", local.buffered_spot)
+  )
 }
 
-# 8) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
+# 9) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
 resource "aws_instance" "app" {
   ami                         = local.final_ami_id
   instance_type               = var.instance_type

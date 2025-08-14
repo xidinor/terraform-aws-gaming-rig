@@ -70,3 +70,10 @@ variable "spot_product_description" {
   type        = string
   default     = "Windows"
 }
+
+# Mode for refer live spot price. false = no live price (default), true = refer live spot price.
+variable "use_live_spot_price" {
+  type        = bool
+  default     = false
+  description = "Refer live spot price or not."
+}
