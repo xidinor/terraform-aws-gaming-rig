@@ -166,7 +166,7 @@ locals {
 
 # 7) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
 resource "aws_instance" "app" {
-  ami                         = var.instance_ami
+  ami                         = local.final_ami_id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public[0].id     # deploy to 1st subnet
   key_name                    = local.resolved_key_name
