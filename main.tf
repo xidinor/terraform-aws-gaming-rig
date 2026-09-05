@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -34,13 +38,13 @@ resource "aws_internet_gateway" "igw" {
 
 # 3) public subnet (2 AZ, IPv6 enabled)
 resource "aws_subnet" "public" {
-  count                             = length(var.azs)
-  vpc_id                            = aws_vpc.this.id
-  cidr_block                        = var.public_subnet_cidrs[count.index]
-  ipv6_cidr_block                   = cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, count.index) # /56→/64
-  availability_zone                 = var.azs[count.index]
-  map_public_ip_on_launch           = true
-  assign_ipv6_address_on_creation   = true
+  count                           = length(var.azs)
+  vpc_id                          = aws_vpc.this.id
+  cidr_block                      = var.public_subnet_cidrs[count.index]
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, count.index) # /56→/64
+  availability_zone               = var.azs[count.index]
+  map_public_ip_on_launch         = true
+  assign_ipv6_address_on_creation = true
 
   tags = { Name = "simple-gaming-snet-${var.azs[count.index]}" }
 }
@@ -74,7 +78,7 @@ resource "aws_security_group" "public_sg" {
   description = "Allow inbound MS-RDP, Amazon DCV, Virtual Desktop from anywhere"
   vpc_id      = aws_vpc.this.id
 
-# ingress: Allow 3389/8443/38810/38820/38830/38840, IPv4/IPv6 both
+  # ingress: Allow 3389/8443/38810/38820/38830/38840, IPv4/IPv6 both
   ingress {
     description      = "RDP"
     from_port        = 3389
@@ -151,17 +155,25 @@ resource "aws_key_pair" "deployer" {
   public_key = tls_private_key.deployer[0].public_key_openssh
 }
 
+resource "local_sensitive_file" "deployer_private_key" {
+  count           = var.key_name == null ? 1 : 0
+  content         = tls_private_key.deployer[0].private_key_pem
+  filename        = "${path.root}/deployer-key.pem"
+  file_permission = "0600"
+}
+
 locals {
   resolved_key_name = coalesce(var.key_name, try(aws_key_pair.deployer[0].key_name, null))
 }
 
 # 7) EC2 instance
 data "aws_ssm_parameter" "fallback_ami" {
-  name = var.ssm_ami_parameter_name
+  count = var.instance_ami == null ? 1 : 0
+  name  = var.ssm_ami_parameter_name
 }
 
 locals {
-  final_ami_id = coalesce(var.instance_ami, data.aws_ssm_parameter.fallback_ami.value)
+  final_ami_id = var.instance_ami != null ? var.instance_ami : data.aws_ssm_parameter.fallback_ami[0].value
 }
 
 # 8) Compute max_price based on the latest Spot price + buffer (when enabled)
@@ -174,7 +186,7 @@ data "aws_ec2_spot_price" "current" {
 
   filter {
     name   = "product-description"
-    values = [var.spot_product_description]  # 例: "Linux/UNIX"
+    values = [var.spot_product_description] # 例: "Linux/UNIX"
   }
 }
 
@@ -184,17 +196,17 @@ locals {
   latest_spot_raw = (var.use_live_spot_price && length(data.aws_ec2_spot_price.current) > 0
     ? try(tonumber(data.aws_ec2_spot_price.current[0].spot_price), null)
     : null
-	)
+  )
 
   # Apply buffer when we have a valid latest price.
   buffered_spot = (
     local.latest_spot_raw == null
     ? null
     : (
-        try(var.spot_price_buffer_ratio, 0) == 0
-        ? local.latest_spot_raw
-        : local.latest_spot_raw * (1 + try(var.spot_price_buffer_ratio, 0))
-      )
+      try(var.spot_price_buffer_ratio, 0) == 0
+      ? local.latest_spot_raw
+      : local.latest_spot_raw * (1 + try(var.spot_price_buffer_ratio, 0))
+    )
   )
 
   # spot_options.max_price parameter in aws_instance: expects string
@@ -208,7 +220,7 @@ locals {
 resource "aws_instance" "app" {
   ami                         = local.final_ami_id
   instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public[0].id     # deploy to 1st subnet
+  subnet_id                   = aws_subnet.public[0].id # deploy to 1st subnet
   key_name                    = local.resolved_key_name
   vpc_security_group_ids      = [aws_security_group.public_sg.id]
   associate_public_ip_address = true
@@ -221,13 +233,13 @@ resource "aws_instance" "app" {
   instance_market_options {
     market_type = "spot"
     spot_options {
-      spot_instance_type = "persistent"
+      spot_instance_type             = "persistent"
       instance_interruption_behavior = "stop"
       # If null => Terraform treats it as "no max price" (OD price is the effective ceiling).
       max_price = local.computed_spot_max_price
       # parameter: valid_until not specified
     }
   }
-  
+
   tags = { Name = "simple-gaming-pc" }
 }

@@ -28,8 +28,7 @@ output "instance_public_ip" {
   description = "IPv4 public IP address for created EC2"
 }
 
-#output "private_key_pem" {
-#  description = "returns generated private key. if specified exists one, returns null."
-#  value       = try(tls_private_key.deployer[0].private_key_pem, null)
-#  sensitive   = true
-#}
+output "generated_private_key_file" {
+  value       = try(local_sensitive_file.deployer_private_key[0].filename, null)
+  description = "Local path of the generated private key. Null when key_name is specified."
+}
