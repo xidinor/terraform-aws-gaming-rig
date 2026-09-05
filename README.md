@@ -8,6 +8,10 @@ AWS 上に Windows Server 2025 ベースのゲーミング用 EC2 Spot Instance 
 - 対象 AWS アカウントを操作できる AWS CloudShell
 - AWS Provider 5.x、TLS Provider 4.x、Local Provider 2.x（`terraform init` で取得）
 
+## リージョン
+
+デフォルト値として東京リージョン (ap-northeast-1) が選ばれます。
+
 ## AMI の選択
 
 `instance_ami` を省略すると、AWS Provider に設定した `region` で次の Systems Manager 公開パラメータを参照し、Windows Server 2025 English Full Base の AMI ID を取得します。
@@ -23,6 +27,16 @@ instance_ami = "ami-0123456789abcdef0"
 ```
 
 別の公開パラメータを利用する場合は、`ssm_ami_parameter_name` を上書きできます。
+
+## Spot インスタンス
+
+このスクリプトで作成される EC2 インスタンスは価格調整なしの Spot インスタンスです。このため、最大価格は [AWS の仕様](https://aws.amazon.com/blogs/compute/new-amazon-ec2-spot-pricing/)に従ってオンデマンド価格になります。
+
+Spot の空き容量によっては作成できない場合があります。現在の構成は最初のサブネットに配置するため、別の AZ への自動切り替えは行いません。
+
+希望のインスタンスタイプでスポットインスタンスを作成する空きがあるかどうかは [Amazon EC2 スポットインスタンス](https://aws.amazon.com/jp/ec2/spot/instance-advisor/) を確認ください。
+
+インスタンスタイプのデフォルト値は `g5.2xlarge` (8 vCPU, 32GiB RAM, NVIDIA A10G ※RTX3090相当) です。
 
 ## EC2 Key Pair
 

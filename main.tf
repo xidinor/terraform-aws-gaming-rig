@@ -176,47 +176,7 @@ locals {
   final_ami_id = var.instance_ami != null ? var.instance_ami : data.aws_ssm_parameter.fallback_ami[0].value
 }
 
-# 8) Compute max_price based on the latest Spot price + buffer (when enabled)
-# === Fetch latest Spot price for the target instance type and AZ ===
-# Uses the first AZ (var.azs[0]) to match the subnet where the instance is placed.
-data "aws_ec2_spot_price" "current" {
-  count             = var.use_live_spot_price ? 1 : 0
-  instance_type     = var.instance_type
-  availability_zone = var.azs[0]
-
-  filter {
-    name   = "product-description"
-    values = [var.spot_product_description] # 例: "Linux/UNIX"
-  }
-}
-
-# === Compute max_price based on the latest Spot price + buffer (when enabled) ===
-locals {
-  # Convert the returned string price to number; null if unavailable.
-  latest_spot_raw = (var.use_live_spot_price && length(data.aws_ec2_spot_price.current) > 0
-    ? try(tonumber(data.aws_ec2_spot_price.current[0].spot_price), null)
-    : null
-  )
-
-  # Apply buffer when we have a valid latest price.
-  buffered_spot = (
-    local.latest_spot_raw == null
-    ? null
-    : (
-      try(var.spot_price_buffer_ratio, 0) == 0
-      ? local.latest_spot_raw
-      : local.latest_spot_raw * (1 + try(var.spot_price_buffer_ratio, 0))
-    )
-  )
-
-  # spot_options.max_price parameter in aws_instance: expects string
-  # if null, "not set" (= maximum price same as On-Demand price)
-  computed_spot_max_price = (
-    local.buffered_spot == null ? null : format("%.5f", local.buffered_spot)
-  )
-}
-
-# 9) EC2 instance (g6.2xlarge, main storage: 64GiB, persistent spot request: interruption_behavior = stop）
+# 8) EC2 Spot instance (64 GiB root volume, stop on interruption)
 resource "aws_instance" "app" {
   ami                         = local.final_ami_id
   instance_type               = var.instance_type
@@ -235,8 +195,7 @@ resource "aws_instance" "app" {
     spot_options {
       spot_instance_type             = "persistent"
       instance_interruption_behavior = "stop"
-      # If null => Terraform treats it as "no max price" (OD price is the effective ceiling).
-      max_price = local.computed_spot_max_price
+      # Omit max_price to use the AWS default ceiling (the On-Demand price).
       # parameter: valid_until not specified
     }
   }
