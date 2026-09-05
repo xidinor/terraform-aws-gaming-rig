@@ -23,13 +23,14 @@ variable "public_subnet_cidrs" {
 }
 
 variable "instance_ami" {
-  description = "AMI ID for EC2 (e.g. Windows Server)"
+  description = "AMI ID for EC2. If null, resolve Windows Server 2025 English Full Base from SSM Parameter Store."
   type        = string
+  default     = null
 }
 
 # SSM parameter for fallback: Windows Server 2025 English Full Base latest
 variable "ssm_ami_parameter_name" {
-  description = "Fallback SSM parameter for OS/Launguage"
+  description = "Fallback SSM parameter for OS/language"
   type        = string
   default     = "/aws/service/ami-windows-latest/Windows_Server-2025-English-Full-Base"
 }
@@ -41,9 +42,9 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "EC2 key-pair name. If not exists or null specified, generate new one."
+  description = "Existing EC2 key-pair name. If null, generate a new key pair and save its private key locally."
   type        = string
-# default     = null
+  default     = null
 }
 
 # Mode for Spot max price. "none" = no max (default), "buffer_above_spot" = latest Spot * (1 + buffer).
