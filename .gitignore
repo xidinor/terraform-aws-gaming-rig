@@ -38,3 +38,8 @@ terraform.rc
 
 # Locally generated private keys
 *.pem
+
+# Local apply helper lock and Python bytecode
+.gaming-apply.lock
+zz-gaming-placement.auto.tfvars.tmp
+__pycache__/

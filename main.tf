@@ -17,7 +17,8 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region      = var.region
+  max_retries = var.aws_max_retries
 }
 
 # 1) VPC (IPv6, DNS support enabled)
@@ -180,7 +181,7 @@ locals {
 resource "aws_instance" "app" {
   ami                         = local.final_ami_id
   instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public[0].id # deploy to 1st subnet
+  subnet_id                   = aws_subnet.public[var.instance_az == null ? 0 : index(var.azs, var.instance_az)].id
   key_name                    = local.resolved_key_name
   vpc_security_group_ids      = [aws_security_group.public_sg.id]
   associate_public_ip_address = true

@@ -10,6 +10,23 @@ variable "azs" {
   default     = ["ap-northeast-1a", "ap-northeast-1c"]
 }
 
+variable "instance_az" {
+  description = "Placement AZ selected by apply_with_az_fallback.py. Null uses the first AZ in azs."
+  type        = string
+  default     = null
+}
+
+variable "aws_max_retries" {
+  description = "AWS API retry limit. Null keeps the provider default; the apply helper uses 2 to surface capacity errors sooner."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.aws_max_retries == null ? true : var.aws_max_retries >= 0 && floor(var.aws_max_retries) == var.aws_max_retries
+    error_message = "aws_max_retries must be null or a non-negative integer."
+  }
+}
+
 variable "vpc_cidr" {
   description = "IPv4 CIDR of VPC"
   type        = string
